@@ -5,24 +5,20 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/google/uuid"
 	"wex/api_service/src/core/domain"
 	"wex/api_service/src/core/ports"
 	"wex/api_service/src/core/services"
+
+	"github.com/google/uuid"
 )
 
 type TransactionController struct {
 	txProducerService *services.TransactionProducerService
-	queryService      *services.TransactionQueryService
 }
 
-func NewTransactionController(
-	txProducerService *services.TransactionProducerService,
-	queryService *services.TransactionQueryService,
-) *TransactionController {
+func NewTransactionController(txProducerService *services.TransactionProducerService) *TransactionController {
 	return &TransactionController{
 		txProducerService: txProducerService,
-		queryService:      queryService,
 	}
 }
 
@@ -85,40 +81,7 @@ func (c *TransactionController) HandleGetStatus(w http.ResponseWriter, r *http.R
 	json.NewEncoder(w).Encode(map[string]string{"id": id.String(), "status": string(status)})
 }
 
-// HandleGetTransaction godoc
-// @Summary Retrieve a stored transaction
-// @Description Fetches a transaction from PostgreSQL by ID
-// @Tags transactions
-// @Produce json
-// @Param id path string true "Transaction ID"
-// @Success 200 {object} ports.TransactionResponseDTO
-// @Failure 400 {string} string "Invalid UUID"
-// @Failure 404 {string} string "Transaction not found"
-// @Router /transactions/{id} [get]
-func (c *TransactionController) HandleGetTransaction(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := uuid.Parse(idStr)
-	if err != nil {
-		http.Error(w, "Invalid UUID", http.StatusBadRequest)
-		return
-	}
-
-	resp, err := c.queryService.GetConvertedTransaction(r.Context(), id, "")
-	if err != nil {
-		if errors.Is(err, domain.ErrNotFound) {
-			http.Error(w, err.Error(), http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
-}
-
 func (c *TransactionController) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /transactions", c.HandleCreateTransaction)
 	mux.HandleFunc("GET /transactions/{id}/status", c.HandleGetStatus)
-	mux.HandleFunc("GET /transactions/{id}", c.HandleGetTransaction)
 }

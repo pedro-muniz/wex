@@ -58,47 +58,6 @@
                 }
             }
         },
-        "/transactions/{id}": {
-            "get": {
-                "description": "Fetches a transaction from PostgreSQL by ID",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "transactions"
-                ],
-                "summary": "Retrieve a stored transaction",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Transaction ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/ports.TransactionResponseDTO"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid UUID",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "Transaction not found",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/transactions/{id}/convert": {
             "get": {
                 "description": "Fetches the result of a conversion job from Valkey",

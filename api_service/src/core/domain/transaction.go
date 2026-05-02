@@ -28,13 +28,6 @@ type PurchaseTransaction struct {
 	UpdatedAt       time.Time
 }
 
-// CurrencyConversionRate represents historical exchange rate data.
-type CurrencyConversionRate struct {
-	TargetCurrency string
-	RateDate       time.Time
-	ExchangeRate   decimal.Decimal
-}
-
 // Validate checks if the PurchaseTransaction follows the business rules.
 func (p *PurchaseTransaction) Validate() error {
 	if len(p.Description) > 50 {
