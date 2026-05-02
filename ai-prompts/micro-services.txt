@@ -1,0 +1,110 @@
+Split the solution into 3 micro-services:
+Microservice 1: API Consumer Service
+
+This service acts as the public-facing API gateway.
+
+Responsibilities:
+
+Expose REST endpoints to:
+create purchase transactions
+check transaction processing status by id
+On transaction submission:
+validate request payload
+generate transaction id
+store initial payload in Valkey
+set transaction status in Valkey (e.g. PENDING)
+publish transaction message to RabbitMQ
+Expose polling endpoint:
+retrieve current transaction status from Valkey
+possible statuses: PENDING, PROCESSING, COMPLETED, FAILED
+
+Suggested endpoints:
+
+POST /transactions
+GET /transactions/{id}/status
+Microservice 2: Transaction CRUD Service
+
+This service handles transaction persistence and processing.
+
+Responsibilities:
+
+Consume messages from RabbitMQ.
+For each transaction:
+validate message integrity
+persist transaction in PostgreSQL
+update transaction status in Valkey
+Support CRUD operations for stored transactions:
+create
+read
+update
+delete
+Update statuses:
+PROCESSING when message is consumed
+COMPLETED after successful persistence
+FAILED if processing fails
+
+Suggested endpoints:
+
+GET /transactions/{id}
+PUT /transactions/{id}
+DELETE /transactions/{id}
+Microservice 3: Currency Conversion Service
+
+This service retrieves stored purchase transactions converted to another currency.
+
+Use the Treasury Reporting Rates of Exchange API:
+
+API:
+https://fiscaldata.treasury.gov/datasets/treasury-reporting-rates-exchange/treasury-reporting-rates-of-exchange
+
+Responsibilities:
+
+Retrieve stored transactions from PostgreSQL.
+Accept a target currency.
+Fetch exchange rates from Treasury API.
+Currency conversion rules:
+use exchange rate with date less than or equal to purchase date
+exchange rate must be within previous 6 months
+if no valid rate exists, return an error
+Return converted transaction including:
+id
+description
+transactionDate
+original purchaseAmountUSD
+target currency
+exchange rate used
+converted amount
+Round converted amount to 2 decimal places.
+
+Suggested endpoint:
+
+GET /transactions/{id}/convert?currency={currencyCode}
+
+Example response:
+
+{
+  "id": "uuid",
+  "description": "Office supplies",
+  "transactionDate": "2026-05-02",
+  "purchaseAmountUSD": 100.00,
+  "targetCurrency": "BRL",
+  "exchangeRate": 5.21,
+  "convertedAmount": 521.00
+}
+Additional Architecture Expectations
+
+Include:
+
+Docker Compose for local development
+RabbitMQ, PostgreSQL, and Valkey containers
+API documentation (OpenAPI/Swagger)
+Unit tests
+Integration tests
+README with setup and run instructions
+
+Preferred architecture patterns:
+
+clean architecture or hexagonal architecture
+DTO separation
+repository pattern
+message contracts/events clearly defined

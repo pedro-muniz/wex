@@ -3,9 +3,10 @@ package services
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"wex/api_service/src/core/domain"
 	"wex/api_service/src/core/ports"
+
+	"github.com/google/uuid"
 )
 
 type ConversionProducerService struct {
@@ -25,6 +26,7 @@ func (s *ConversionProducerService) RequestConversion(ctx context.Context, id uu
 	if err := req.Validate(); err != nil {
 		return err
 	}
+
 	return s.publisher.PublishConversionRequest(ctx, id, currency)
 }
 
