@@ -1,0 +1,152 @@
+basePath: /
+definitions:
+  ports.TransactionRequestDTO:
+    properties:
+      description:
+        type: string
+      purchase_amount:
+        type: number
+      transaction_date:
+        description: YYYY-MM-DD
+        type: string
+    type: object
+  ports.TransactionResponseDTO:
+    properties:
+      convertedAmount:
+        type: number
+      description:
+        type: string
+      exchangeRate:
+        type: number
+      id:
+        type: string
+      purchaseAmountUSD:
+        type: number
+      targetCurrency:
+        type: string
+      transactionDate:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: API for managing purchase transactions with multi-currency support.
+  title: Purchase Transaction API
+  version: "1.0"
+paths:
+  /transactions:
+    post:
+      consumes:
+      - application/json
+      description: Validates and stores a transaction payload, then publishes it for
+        asynchronous processing
+      parameters:
+      - description: Transaction Payload
+        in: body
+        name: transaction
+        required: true
+        schema:
+          $ref: '#/definitions/ports.TransactionRequestDTO'
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Create a new purchase transaction
+      tags:
+      - transactions
+  /transactions/{id}/convert:
+    get:
+      description: Fetches the result of a conversion job from Valkey
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target Currency Code (e.g. BRL)
+        in: query
+        name: currency
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/ports.TransactionResponseDTO'
+        "404":
+          description: Result not found yet
+          schema:
+            type: string
+      summary: Retrieve a conversion result
+      tags:
+      - transactions
+    post:
+      description: Triggers an asynchronous conversion job for the specified currency
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Target Currency Code (e.g. BRL)
+        in: query
+        name: currency
+        required: true
+        type: string
+      responses:
+        "202":
+          description: Accepted
+          schema:
+            type: string
+        "400":
+          description: Invalid Request
+          schema:
+            type: string
+      summary: Request a currency conversion
+      tags:
+      - transactions
+  /transactions/{id}/status:
+    get:
+      description: Retrieves the current status from Valkey
+      parameters:
+      - description: Transaction ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Status
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid UUID
+          schema:
+            type: string
+        "404":
+          description: Status not found
+          schema:
+            type: string
+      summary: Check transaction processing status
+      tags:
+      - transactions
+swagger: "2.0"
