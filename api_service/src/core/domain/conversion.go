@@ -31,6 +31,9 @@ type ConversionRequest struct {
 }
 
 func (r *ConversionRequest) Validate() error {
+	if len(r.TargetCurrency) == 0 {
+		return fmt.Errorf("%w: currency code is required", ErrValidation)
+	}
 	if len(r.TargetCurrency) > 50 {
 		return fmt.Errorf("%w: currency code must be less than 50 characters", ErrValidation)
 	}
