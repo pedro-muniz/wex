@@ -22,7 +22,7 @@ func (m *MockTreasuryAPIDAO) FetchRates(ctx context.Context, currency string, st
 
 func TestTreasuryRateProvider(t *testing.T) {
 	mockDAO := new(MockTreasuryAPIDAO)
-	provider := NewTreasuryRateProvider(mockDAO)
+	provider := NewTreasuryRateRepository(mockDAO)
 	ctx := context.Background()
 	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
 

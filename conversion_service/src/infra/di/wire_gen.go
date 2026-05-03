@@ -15,6 +15,7 @@ import (
 	"wex/conversion_service/src/core/services"
 	"wex/conversion_service/src/infra"
 	"wex/conversion_service/src/infra/dao"
+	"wex/conversion_service/src/infra/providers"
 	"wex/conversion_service/src/infra/repositories"
 )
 
@@ -24,21 +25,23 @@ func InitializeWorker(db *sql.DB, amqpChannel *amqp091.Channel, redisClient *red
 	postgresDAO := dao.NewPostgresDAO(db)
 	transactionRepository := repositories.NewTransactionRepository(postgresDAO)
 	treasuryAPIDAO := dao.NewTreasuryAPIDAO()
-	treasuryRateProvider := repositories.NewTreasuryRateProvider(treasuryAPIDAO)
+	treasuryRateRepository := repositories.NewTreasuryRateRepository(treasuryAPIDAO)
+	ratePostgresRepository := repositories.NewRatePostgresRepository(postgresDAO)
 	valkeyDAO := dao.NewValkeyDAO(redisClient)
-	valkeyPayloadStore := repositories.NewValkeyPayloadStore(valkeyDAO)
-	transactionQueryService := services.NewTransactionQueryService(transactionRepository, treasuryRateProvider, valkeyPayloadStore)
-	rabbitMQConsumer := infra.NewRabbitMQConsumer(amqpChannel, queueName, transactionQueryService, valkeyPayloadStore)
+	valkeyRepository := repositories.NewValkeyRepository(valkeyDAO)
+	rateCacheProvider := providers.NewRateCacheProvider(treasuryRateRepository, ratePostgresRepository, valkeyRepository)
+	conversionService := services.NewConversionService(transactionRepository, rateCacheProvider, valkeyRepository)
+	rabbitMQConsumer := infra.NewRabbitMQConsumer(amqpChannel, queueName, conversionService, valkeyRepository)
 	return rabbitMQConsumer
 }
 
 // wire.go:
 
 // ServiceSet defines the singleton services for the application.
-var ServiceSet = wire.NewSet(services.NewTransactionQueryService)
+var ServiceSet = wire.NewSet(services.NewConversionService)
 
 // RepoSet defines the singleton repositories.
-var RepoSet = wire.NewSet(repositories.NewTransactionRepository, wire.Bind(new(ports.TransactionRepository), new(*repositories.TransactionRepository)), repositories.NewTreasuryRateProvider, wire.Bind(new(ports.ConversionRateProvider), new(*repositories.TreasuryRateProvider)), repositories.NewValkeyPayloadStore, wire.Bind(new(ports.PayloadStore), new(*repositories.ValkeyPayloadStore)))
+var RepoSet = wire.NewSet(repositories.NewTransactionRepository, wire.Bind(new(ports.TransactionRepository), new(*repositories.TransactionRepository)), repositories.NewTreasuryRateRepository, repositories.NewRatePostgresRepository, providers.NewRateCacheProvider, wire.Bind(new(ports.ConversionRateProvider), new(*providers.RateCacheProvider)), repositories.NewValkeyRepository, wire.Bind(new(ports.PayloadStore), new(*repositories.ValkeyRepository)))
 
 // DAOSet defines the singleton DAOs.
-var DAOSet = wire.NewSet(dao.NewPostgresDAO, dao.NewTreasuryAPIDAO, dao.NewValkeyDAO)
+var DAOSet = wire.NewSet(dao.NewPostgresDAO, wire.Bind(new(repositories.RatePostgresDAO), new(*dao.PostgresDAO)), wire.Bind(new(repositories.PostgresDAO), new(*dao.PostgresDAO)), dao.NewTreasuryAPIDAO, wire.Bind(new(repositories.TreasuryAPIDAO), new(*dao.TreasuryAPIDAO)), dao.NewValkeyDAO, wire.Bind(new(repositories.ValkeyDAO), new(*dao.ValkeyDAO)))

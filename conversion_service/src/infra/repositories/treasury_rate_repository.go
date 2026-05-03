@@ -13,15 +13,15 @@ type TreasuryAPIDAO interface {
 	FetchRates(ctx context.Context, currency string, startDate, endDate string) (*dao.TreasuryRateResponse, error)
 }
 
-type TreasuryRateProvider struct {
+type TreasuryRateRepository struct {
 	dao TreasuryAPIDAO
 }
 
-func NewTreasuryRateProvider(dao TreasuryAPIDAO) *TreasuryRateProvider {
-	return &TreasuryRateProvider{dao: dao}
+func NewTreasuryRateRepository(dao TreasuryAPIDAO) *TreasuryRateRepository {
+	return &TreasuryRateRepository{dao: dao}
 }
 
-func (p *TreasuryRateProvider) GetRate(ctx context.Context, targetCurrency string, transactionDate time.Time) (domain.CurrencyConversionRate, error) {
+func (p *TreasuryRateRepository) GetRate(ctx context.Context, targetCurrency string, transactionDate time.Time) (domain.CurrencyConversionRate, error) {
 	startDate := transactionDate.AddDate(0, -6, 0).Format("2006-01-02")
 	endDate := transactionDate.Format("2006-01-02")
 

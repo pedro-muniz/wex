@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 	"wex/conversion_service/src/core/domain"
+	"wex/conversion_service/src/infra/queries"
 )
 
 type PostgresDAO interface {
@@ -21,12 +22,7 @@ func NewTransactionRepository(dao PostgresDAO) *TransactionRepository {
 }
 
 func (r *TransactionRepository) GetByID(ctx context.Context, id uuid.UUID) (domain.PurchaseTransaction, error) {
-	const query = `
-		SELECT id, description, transaction_date, amount, status, created_at, updated_at 
-		FROM purchase_transactions 
-		WHERE id = $1`
-		
-	row := r.dao.QueryRow(ctx, query, id)
+	row := r.dao.QueryRow(ctx, queries.GetTransactionByID, id)
 
 	var tx domain.PurchaseTransaction
 	err := row.Scan(&tx.ID, &tx.Description, &tx.TransactionDate, &tx.Amount, &tx.Status, &tx.CreatedAt, &tx.UpdatedAt)

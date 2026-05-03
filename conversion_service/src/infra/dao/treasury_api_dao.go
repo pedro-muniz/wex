@@ -10,10 +10,10 @@ import (
 
 type TreasuryRateResponse struct {
 	Data []struct {
-		RecordDate       string `json:"record_date"`
-		CountryCurrency  string `json:"country_currency_desc"`
-		ExchangeRate     string `json:"exchange_rate"`
-		EffectiveDate    string `json:"effective_date"`
+		RecordDate      string `json:"record_date"`
+		CountryCurrency string `json:"country_currency_desc"`
+		ExchangeRate    string `json:"exchange_rate"`
+		EffectiveDate   string `json:"effective_date"`
 	} `json:"data"`
 }
 
@@ -30,9 +30,10 @@ func NewTreasuryAPIDAO() *TreasuryAPIDAO {
 }
 
 func (d *TreasuryAPIDAO) FetchRates(ctx context.Context, currency string, startDate, endDate string) (*TreasuryRateResponse, error) {
-	// Filter: currency, record_date range
-	filter := fmt.Sprintf("currency:eq:%s,record_date:gte:%s,record_date:lte:%s", currency, startDate, endDate)
-	
+	// Filter: country_currency_desc, record_date range
+	filter := fmt.Sprintf("country_currency_desc:eq:%s,record_date:gte:%s,record_date:lte:%s",
+		currency, startDate, endDate)
+
 	u, _ := url.Parse(d.baseURL)
 	q := u.Query()
 	q.Set("filter", filter)

@@ -1,0 +1,9 @@
+2. Traffic Control Strategy
+
+To actually "control" the traffic rather than just passing it through, you need these three mechanisms:
+
+    Load Leveling: Even if 10,000 users hit the API at once, the Workers only pull what they can handle (e.g., 50 messages at a time). The queue grows, but the database doesn't crash.
+
+    Backpressure (TTL & Max Length): Configure your RabbitMQ queue with x-max-length. If the queue gets too full, you can reject new requests at the API level (returning a 429 Too Many Requests) to protect system stability.
+
+    Fair Dispatch: Use channel.basicQos(prefetchCount: 1). This ensures RabbitMQ doesn't send a new message to a worker until that worker has acknowledged the previous one, preventing one "slow" worker from holding up a batch of tasks.  

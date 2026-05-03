@@ -1,0 +1,51 @@
+Design a resilient worker responsible for retrieving currency exchange rates using a multi-layer cache strategy.
+ The worker must prioritize Valkey and Postgres before calling any third-party API.
+Context
+The system processes requests containing:
+currency_code (e.g., USD, BRL, EUR)
+date (ISO format: YYYY-MM-DD)
+Architecture includes:
+Valkey (fast, in-memory cache)
+Postgres (persistent storage of historical rates)
+External third-party exchange rate API
+Core Flow (Strict Order)
+Generate Cache Key
+Format: rate:{currency_code}:{date}
+Check Valkey (L1 Cache)
+If found:
+Return cached value immediately
+Mark as cache_hit_l1
+Do NOT query Postgres or API
+Check Postgres (L2 Cache / Source of Truth)
+Query by currency_code and date
+If found:
+Store result in Valkey (warm cache)
+Return result
+Mark as cache_hit_l2
+Call Third-Party API (Fallback)
+If not found in Valkey or Postgres:
+Fetch rate from external API
+Handle timeouts, retries, and failures
+Persist and Cache
+On successful API response:
+Store in Postgres (idempotent insert/update)
+Store in Valkey with TTL
+Return result
+Mark as cache_miss
+Advanced Requirements
+1. Cache Strategy
+Valkey TTL should be configurable (e.g., shorter for current day, longer for historical data)
+Support stale-while-revalidate:
+Optionally return stale Valkey data while refreshing in background
+2. Concurrency Control
+Prevent duplicate API calls for the same key:
+Use distributed locks in Valkey (SETNX or similar)
+Or request coalescing
+3. Idempotency
+Ensure multiple identical requests do not create duplicate DB records
+Use (currency_code, date) as unique constraint in Postgres
+4. Error Handling
+If API fails:
+Return stale data if available (Valkey or Postgres)
+Otherwise return a controlled error
+Log all failures and retries
