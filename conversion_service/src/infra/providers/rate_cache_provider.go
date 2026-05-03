@@ -38,17 +38,17 @@ func (s *RateCacheProvider) GetRate(ctx context.Context, targetCurrency string, 
 	dateStr := transactionDate.Format("2006-01-02")
 	valkeyKey := fmt.Sprintf("rate:%s:%s", targetCurrency, dateStr)
 
-	// 1. Check Valkey (L1)
+	// 1. Check Valkey (L1) with exact date match
 	if rate, hit := s.checkValkey(ctx, targetCurrency, transactionDate, valkeyKey); hit {
 		return rate, nil
 	}
 
-	// 2. Check Postgres (L2)
+	// 2. Check Postgres (L2) with 6 months rule
 	if rate, hit := s.checkPostgres(ctx, targetCurrency, transactionDate, valkeyKey); hit {
 		return rate, nil
 	}
 
-	// 3. Fallback to API with Distributed Lock
+	// 3. Fallback to API with Distributed Lock with 6 months rule
 	return s.fetchFromAPIWithLock(ctx, targetCurrency, transactionDate, valkeyKey, dateStr)
 }
 
