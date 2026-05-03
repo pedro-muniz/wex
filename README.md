@@ -6,7 +6,7 @@ A robust, microservices-based asynchronous system designed to handle purchase tr
 
 The system follows an **Event-Driven, Hexagonal Architecture** (Ports and Adapters) to ensure high decoupling and scalability. It utilizes a producer-consumer pattern for processing transactions and currency conversions asynchronously.
 
-![System Architecture](./ai-prompts/architecture.jpeg)
+![System Architecture](./ai-prompts/architecture.png)
 
 ### Core Technologies
 - **Language**: Go (Golang)
