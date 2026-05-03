@@ -10,4 +10,5 @@ import (
 type MessagePublisher interface {
 	PublishJob(ctx context.Context, jobID uuid.UUID) error
 	PublishConversionRequest(ctx context.Context, jobID uuid.UUID, currency string) error
+	PublishSyncRequest(ctx context.Context, jobID uuid.UUID) error
 }

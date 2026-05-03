@@ -54,9 +54,13 @@ func (s *TransactionProducerService) CreateTransaction(ctx context.Context, dto 
 }
 
 func (s *TransactionProducerService) GetTransactionStatus(ctx context.Context, id uuid.UUID) (domain.TransactionStatus, error) {
+	// Publish sync request to ensure cache is updated if needed
+	_ = s.publisher.PublishSyncRequest(ctx, id)
 	return s.payloadStore.GetStatus(ctx, id)
 }
 
 func (s *TransactionProducerService) GetTransaction(ctx context.Context, id uuid.UUID) (domain.PurchaseTransaction, error) {
+	// Publish sync request to ensure cache is updated if needed
+	_ = s.publisher.PublishSyncRequest(ctx, id)
 	return s.payloadStore.GetPayload(ctx, id)
 }

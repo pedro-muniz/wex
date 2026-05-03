@@ -60,3 +60,20 @@ func (p *RabbitMQPublisher) PublishConversionRequest(ctx context.Context, jobID 
 		msg,
 	)
 }
+
+func (p *RabbitMQPublisher) PublishSyncRequest(ctx context.Context, jobID uuid.UUID) error {
+	msg := amqp.Publishing{
+		ContentType:  "text/plain",
+		Body:         []byte(jobID.String()),
+		DeliveryMode: amqp.Persistent,
+	}
+	// We'll use a specific queue for cache sync
+	return p.dao.Publish(
+		ctx,
+		string(p.exchange),
+		"sync_jobs",
+		false,
+		false,
+		msg,
+	)
+}

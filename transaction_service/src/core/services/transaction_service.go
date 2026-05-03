@@ -62,3 +62,26 @@ func (s *TransactionPersistenceService) ProcessTransaction(ctx context.Context, 
 func (s *TransactionPersistenceService) GetTransaction(ctx context.Context, id uuid.UUID) (domain.PurchaseTransaction, error) {
 	return s.repo.GetByID(ctx, id)
 }
+
+func (s *TransactionPersistenceService) SyncCache(ctx context.Context, id uuid.UUID) error {
+	// Check if status exists in cache
+	_, err := s.payloadStore.GetStatus(ctx, id)
+	if err == nil {
+		// Cache hit, nothing to do
+		return nil
+	}
+
+	// Cache miss, retrieve from repo and store in cache
+	tx, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		log.Printf("failed to retrieve transaction %s from db during sync: %v", id, err)
+		return err
+	}
+
+	if err := s.payloadStore.StorePayload(ctx, id, tx); err != nil {
+		log.Printf("failed to sync payload to cache for %s: %v", id, err)
+		return err
+	}
+
+	return nil
+}
