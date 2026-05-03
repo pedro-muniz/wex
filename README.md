@@ -70,3 +70,13 @@ make wire
 - **Hexagonal Architecture**: Core business logic is isolated from infrastructure (Postgres, RabbitMQ) via Ports and Adapters.
 - **Statelessness**: All services are stateless, allowing for horizontal scaling.
 - **Decoupling**: The API producer never interacts directly with the database, ensuring high availability even during DB maintenance.
+
+---
+
+## 🔮 Further Improvements
+
+To elevate the system to production-grade resilience and observability, the following improvements are planned:
+
+- **Observability, Metrics & Alarms**: Implement distributed tracing (e.g., OpenTelemetry), centralized logging, and Prometheus/Grafana dashboards to monitor queue depths, conversion latency, and error rates. Set up proactive alerting for when backpressure kicks in or error budgets are consumed.
+- **Traffic Control Strategy**: Enhance the message broker integration with sophisticated load leveling, explicit QoS `prefetchCount` for fair dispatch, and `x-max-length` backpressure mechanisms to actively reject traffic via HTTP 429 when processing queues reach capacity.
+- **Database per Microservice**: While currently sharing a PostgreSQL instance for simplicity, the next architectural iteration should provision physically independent databases (or logical schemas) for the `Transaction Service` and `Conversion Service` to strictly enforce domain boundaries and allow independent data scaling.
