@@ -1,0 +1,64 @@
+1. High-Level Architecture Flow
+
+Instead of the API performing the heavy lifting immediately, it delegates the work to RabbitMQ and provides the client with a "claim check."
+
+    Request Entry: The Web Client sends a request to your API Producer.
+
+    Queueing: The API validates the request, generates a unique job_id, and pushes the task into a Work Queue.
+
+    Immediate Response: The API immediately returns a 202 Accepted status to the client, including the job_id and a URL to poll for the result.
+
+    Processing: Worker Consumers pull tasks from the queue at a controlled rate (using the prefetch_count setting to avoid overload).
+
+    State Storage: Once the worker finishes, it stores the result in a fast-access database (like Redis or MongoDB) keyed by the job_id.
+
+2. Traffic Control Strategy
+
+To actually "control" the traffic rather than just passing it through, you need these three mechanisms:
+
+    Load Leveling: Even if 10,000 users hit the API at once, the Workers only pull what they can handle (e.g., 50 messages at a time). The queue grows, but the database doesn't crash.
+
+    Backpressure (TTL & Max Length): Configure your RabbitMQ queue with x-max-length. If the queue gets too full, you can reject new requests at the API level (returning a 429 Too Many Requests) to protect system stability.
+
+    Fair Dispatch: Use channel.basicQos(prefetchCount: 1). This ensures RabbitMQ doesn't send a new message to a worker until that worker has acknowledged the previous one, preventing one "slow" worker from holding up a batch of tasks.  
+
+3. The Polling Strategy
+
+Since the connection is closed after the 202 Accepted response, the client needs a way to get the data.
+The "Status Endpoint" Pattern
+
+The client "pulls" the response by hitting a dedicated GET endpoint.
+Step	Component	Action
+1	Client	GET /api/status/{job_id} every 2–5 seconds.
+2	API	Checks Redis for the job_id.
+3	API	Returns { "status": "processing" } if not found.
+4	API	Returns { "status": "completed", "data": {...} } when the worker is done.
+
+    Pro Tip: To make polling more efficient, use Exponential Backoff. The client should wait 1s, then 2s, then 4s, then 8s between checks. This prevents the "polling" itself from becoming its own DDoS attack on your API.
+
+4. Example Data Schema
+
+The Message (API to RabbitMQ):
+JSON
+
+{
+  "job_id": "uuid-12345",
+  "payload": { "user_id": 99, "action": "generate_report" },
+  "timestamp": 1714580000
+}
+
+The Response (Worker to Redis):
+JSON
+
+{
+  "job_id": "uuid-12345",
+  "status": "success",
+  "result_url": "https://s3.amazon.com/reports/99.pdf",
+  "completed_at": 1714580050
+}
+
+Summary of Benefits
+
+1. Resilience: If your Workers go down, the messages stay safe in RabbitMQ.
+2. Scalability: You can spin up 10 more Worker containers during peak hours without touching your API code.
+3. UX: The user sees a "Processing..." screen immediately instead of a browser timeout.

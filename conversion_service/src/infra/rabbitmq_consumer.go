@@ -16,11 +16,11 @@ import (
 type RabbitMQConsumer struct {
 	channel      *amqp.Channel
 	queueName    string
-	service      *services.TransactionQueryService
+	service      *services.ConversionService
 	payloadStore ports.PayloadStore
 }
 
-func NewRabbitMQConsumer(channel *amqp.Channel, queueName string, service *services.TransactionQueryService, payloadStore ports.PayloadStore) *RabbitMQConsumer {
+func NewRabbitMQConsumer(channel *amqp.Channel, queueName string, service *services.ConversionService, payloadStore ports.PayloadStore) *RabbitMQConsumer {
 	return &RabbitMQConsumer{
 		channel:      channel,
 		queueName:    queueName,

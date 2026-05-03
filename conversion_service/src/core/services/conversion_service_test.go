@@ -56,7 +56,7 @@ func TestGetConvertedTransaction(t *testing.T) {
 		repo := new(MockRepo)
 		rateProvider := new(MockRateProvider)
 		payloadStore := new(MockPayloadStore)
-		service := NewTransactionQueryService(repo, rateProvider, payloadStore)
+		service := NewConversionService(repo, rateProvider, payloadStore)
 
 		tx := domain.PurchaseTransaction{
 			ID:     id,
@@ -69,6 +69,7 @@ func TestGetConvertedTransaction(t *testing.T) {
 		repo.On("GetByID", mock.Anything, id).Return(tx, nil)
 		rateProvider.On("GetRate", mock.Anything, targetCurrency, mock.Anything).Return(rate, nil)
 		payloadStore.On("SetRaw", mock.Anything, statusKey, string(domain.StatusCompleted)).Return(nil)
+		payloadStore.On("SetRaw", mock.Anything, fmt.Sprintf("conversion:%s:%s", id, targetCurrency), mock.Anything).Return(nil)
 
 		resp, err := service.GetConvertedTransaction(context.Background(), id, targetCurrency)
 
@@ -84,10 +85,11 @@ func TestGetConvertedTransaction(t *testing.T) {
 		repo := new(MockRepo)
 		rateProvider := new(MockRateProvider)
 		payloadStore := new(MockPayloadStore)
-		service := NewTransactionQueryService(repo, rateProvider, payloadStore)
+		service := NewConversionService(repo, rateProvider, payloadStore)
 
 		repo.On("GetByID", mock.Anything, id).Return(domain.PurchaseTransaction{}, errors.New("db error"))
 		payloadStore.On("SetRaw", mock.Anything, statusKey, string(domain.StatusFailed)).Return(nil)
+		payloadStore.On("SetRaw", mock.Anything, fmt.Sprintf("conversion:%s:%s", id, targetCurrency), mock.Anything).Return(nil)
 
 		_, err := service.GetConvertedTransaction(context.Background(), id, targetCurrency)
 
@@ -99,7 +101,7 @@ func TestGetConvertedTransaction(t *testing.T) {
 		repo := new(MockRepo)
 		rateProvider := new(MockRateProvider)
 		payloadStore := new(MockPayloadStore)
-		service := NewTransactionQueryService(repo, rateProvider, payloadStore)
+		service := NewConversionService(repo, rateProvider, payloadStore)
 
 		tx := domain.PurchaseTransaction{
 			ID:     id,
@@ -109,6 +111,7 @@ func TestGetConvertedTransaction(t *testing.T) {
 		repo.On("GetByID", mock.Anything, id).Return(tx, nil)
 		rateProvider.On("GetRate", mock.Anything, targetCurrency, mock.Anything).Return(domain.CurrencyConversionRate{}, errors.New("api error"))
 		payloadStore.On("SetRaw", mock.Anything, statusKey, string(domain.StatusFailed)).Return(nil)
+		payloadStore.On("SetRaw", mock.Anything, fmt.Sprintf("conversion:%s:%s", id, targetCurrency), mock.Anything).Return(nil)
 
 		_, err := service.GetConvertedTransaction(context.Background(), id, targetCurrency)
 

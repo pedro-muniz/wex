@@ -22,6 +22,11 @@ func (m *MockValkeyDAO) Set(ctx context.Context, key string, value any, expirati
 	return args.Error(0)
 }
 
+func (m *MockValkeyDAO) SetNX(ctx context.Context, key string, value any, expiration time.Duration) (bool, error) {
+	args := m.Called(ctx, key, value, expiration)
+	return args.Bool(0), args.Error(1)
+}
+
 func (m *MockValkeyDAO) Get(ctx context.Context, key string) (string, error) {
 	args := m.Called(ctx, key)
 	return args.String(0), args.Error(1)
@@ -44,7 +49,7 @@ func (m *MockValkeyDAO) GetStatus(ctx context.Context, id string) (string, error
 
 func TestValkeyPayloadStore(t *testing.T) {
 	mockDAO := new(MockValkeyDAO)
-	store := NewValkeyPayloadStore(mockDAO)
+	store := NewValkeyRepository(mockDAO)
 	ctx := context.Background()
 	id := uuid.New()
 	tx := domain.PurchaseTransaction{ID: id, Description: "Test", Amount: decimal.NewFromInt(100)}

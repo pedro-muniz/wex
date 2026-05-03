@@ -27,6 +27,10 @@ func (d *ValkeyDAO) Del(ctx context.Context, key string) error {
 	return d.client.Del(ctx, key).Err()
 }
 
+func (d *ValkeyDAO) SetNX(ctx context.Context, key string, value any, expiration time.Duration) (bool, error) {
+	return d.client.SetNX(ctx, key, value, expiration).Result()
+}
+
 func (d *ValkeyDAO) SetStatus(ctx context.Context, transactionID string, status string, expiration time.Duration) error {
 	return d.client.Set(ctx, "status:"+transactionID, status, expiration).Err()
 }
