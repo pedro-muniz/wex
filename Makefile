@@ -32,10 +32,10 @@ clean: ## Remove all build artifacts
 	rm -rf bin/
 
 up: ## Start the full system using Docker Compose
-	docker-compose up --build
+	docker compose up --build
 
 down: ## Stop the full system
-	docker-compose down
+	docker compose down
 
 help:
 	@echo "Usage: make [target]"

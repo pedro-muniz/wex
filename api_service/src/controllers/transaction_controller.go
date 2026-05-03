@@ -72,13 +72,13 @@ func (c *TransactionController) HandleGetStatus(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	status, err := c.txProducerService.GetTransactionStatus(r.Context(), id)
+	tx, err := c.txProducerService.GetTransaction(r.Context(), id)
 	if err != nil {
-		http.Error(w, "Status not found", http.StatusNotFound)
+		http.Error(w, "Transaction not found", http.StatusNotFound)
 		return
 	}
 
-	json.NewEncoder(w).Encode(map[string]string{"id": id.String(), "status": string(status)})
+	json.NewEncoder(w).Encode(tx)
 }
 
 func (c *TransactionController) RegisterRoutes(mux *http.ServeMux) {

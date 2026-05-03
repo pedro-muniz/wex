@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
@@ -13,17 +15,38 @@ import (
 )
 
 func main() {
+	godotenv.Load()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// Infrastructure Setup
-	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+			os.Getenv("POSTGRES_USER"),
+			os.Getenv("POSTGRES_PASSWORD"),
+			os.Getenv("POSTGRES_HOST"),
+			os.Getenv("POSTGRES_PORT"),
+			os.Getenv("POSTGRES_DB"),
+		)
+	}
+	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	rabbitConn, err := amqp.Dial(os.Getenv("RABBITMQ_URL"))
+	amqpURL := os.Getenv("RABBITMQ_URL")
+	if amqpURL == "" {
+		amqpURL = fmt.Sprintf("amqp://%s:%s@%s:%s/",
+			os.Getenv("RABBITMQ_USER"),
+			os.Getenv("RABBITMQ_PASSWORD"),
+			os.Getenv("RABBITMQ_HOST"),
+			os.Getenv("RABBITMQ_PORT"),
+		)
+	}
+	rabbitConn, err := amqp.Dial(amqpURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -35,8 +58,15 @@ func main() {
 	}
 	defer ch.Close()
 
+	redisAddr := os.Getenv("VALKEY_URL")
+	if redisAddr == "" {
+		redisAddr = fmt.Sprintf("%s:%s",
+			os.Getenv("VALKEY_HOST"),
+			os.Getenv("VALKEY_PORT"),
+		)
+	}
 	redisClient := redis.NewClient(&redis.Options{
-		Addr: os.Getenv("VALKEY_URL"),
+		Addr: redisAddr,
 	})
 
 	// DI Initialization

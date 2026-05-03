@@ -1,4 +1,4 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 COPY go.mod go.sum ./
@@ -9,5 +9,4 @@ RUN go build -o transaction-service main.go
 FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/transaction-service .
-EXPOSE 8081
 CMD ["./transaction-service"]

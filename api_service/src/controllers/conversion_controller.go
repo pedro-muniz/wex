@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -46,7 +47,10 @@ func (c *ConversionController) HandleRequestConversion(w http.ResponseWriter, r 
 		return
 	}
 
+	resultKey := fmt.Sprintf("conversion:%s:%s", id.String(), currency)
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
+	json.NewEncoder(w).Encode(map[string]string{"key": resultKey})
 }
 
 // HandleGetConversionResult godoc

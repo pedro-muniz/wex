@@ -27,12 +27,15 @@ func (s *TransactionProducerService) CreateTransaction(ctx context.Context, dto 
 		return uuid.Nil, domain.ErrValidation
 	}
 
+	now := time.Now()
 	tx := domain.PurchaseTransaction{
 		ID:              uuid.New(),
 		Description:     dto.Description,
 		TransactionDate: date,
 		Amount:          dto.PurchaseAmount,
 		Status:          domain.StatusPending,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 
 	if err := tx.Validate(); err != nil {
@@ -52,4 +55,8 @@ func (s *TransactionProducerService) CreateTransaction(ctx context.Context, dto 
 
 func (s *TransactionProducerService) GetTransactionStatus(ctx context.Context, id uuid.UUID) (domain.TransactionStatus, error) {
 	return s.payloadStore.GetStatus(ctx, id)
+}
+
+func (s *TransactionProducerService) GetTransaction(ctx context.Context, id uuid.UUID) (domain.PurchaseTransaction, error) {
+	return s.payloadStore.GetPayload(ctx, id)
 }
