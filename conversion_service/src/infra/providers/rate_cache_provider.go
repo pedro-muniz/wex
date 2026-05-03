@@ -34,7 +34,8 @@ func NewRateCacheProvider(
 	}
 }
 
-func (s *RateCacheProvider) GetRate(ctx context.Context, targetCurrency string, transactionDate time.Time) (domain.CurrencyConversionRate, error) {
+func (s *RateCacheProvider) GetRate(ctx context.Context, targetCurrency string,
+	transactionDate time.Time) (domain.CurrencyConversionRate, error) {
 	dateStr := transactionDate.Format("2006-01-02")
 	valkeyKey := fmt.Sprintf("rate:%s:%s", targetCurrency, dateStr)
 
@@ -61,7 +62,8 @@ func (s *RateCacheProvider) checkValkey(ctx context.Context, targetCurrency stri
 				return cr.Rate, true // Hit and valid
 			}
 			// Hit but stale -> spawn background refresh, return stale data
-			go s.fetchAndCacheAsync(context.Background(), targetCurrency, transactionDate, valkeyKey)
+			go s.fetchAndCacheAsync(context.Background(), targetCurrency,
+				transactionDate, valkeyKey)
 			return cr.Rate, true
 		}
 	}
@@ -124,7 +126,9 @@ func (s *RateCacheProvider) cacheToValkey(ctx context.Context, key string, rate 
 	_ = s.valkeyRepo.SetRawWithTTL(ctx, key, string(data), 24*time.Hour)
 }
 
-func (s *RateCacheProvider) fetchAndCacheAsync(ctx context.Context, targetCurrency string, transactionDate time.Time, valkeyKey string) {
+func (s *RateCacheProvider) fetchAndCacheAsync(ctx context.Context,
+	targetCurrency string, transactionDate time.Time, valkeyKey string) {
+
 	lockKey := fmt.Sprintf("lock:rate:%s:%s", targetCurrency, transactionDate.Format("2006-01-02"))
 	acquired, _ := s.valkeyRepo.SetNXRaw(ctx, lockKey, "locked", 10*time.Second)
 	if !acquired {
