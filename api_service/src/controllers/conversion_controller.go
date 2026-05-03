@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/google/uuid"
 	"wex/api_service/src/core/services"
+
+	"github.com/google/uuid"
 )
 
 type ConversionController struct {
@@ -24,7 +25,7 @@ func NewConversionController(convProducerService *services.ConversionProducerSer
 // @Description Triggers an asynchronous conversion job for the specified currency
 // @Tags transactions
 // @Param id path string true "Transaction ID"
-// @Param currency query string true "Target Currency Code (e.g. BRL)"
+// @Param currency query string true "Target Currency Code (e.g. Brazil-Real)"
 // @Success 202 {string} string "Accepted"
 // @Failure 400 {string} string "Invalid Request"
 // @Router /transactions/{id}/convert [post]
@@ -59,7 +60,7 @@ func (c *ConversionController) HandleRequestConversion(w http.ResponseWriter, r 
 // @Tags transactions
 // @Produce json
 // @Param id path string true "Transaction ID"
-// @Param currency query string true "Target Currency Code (e.g. BRL)"
+// @Param currency query string true "Target Currency Code (e.g. Brazil-Real)"
 // @Success 200 {object} ports.TransactionResponseDTO
 // @Failure 404 {string} string "Result not found yet"
 // @Router /transactions/{id}/convert [get]
