@@ -24,6 +24,18 @@ func NewRabbitMQConsumer(channel *amqp.Channel, queueName string, service *servi
 }
 
 func (c *RabbitMQConsumer) Start(ctx context.Context) error {
+	_, err := c.channel.QueueDeclare(
+		c.queueName,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		return err
+	}
+
 	msgs, err := c.channel.Consume(
 		c.queueName,
 		"",

@@ -25,9 +25,9 @@ func InitializeWorker(db *sql.DB, amqpChannel *amqp091.Channel, redisClient *red
 	transactionRepository := repositories.NewTransactionRepository(postgresDAO)
 	treasuryAPIDAO := dao.NewTreasuryAPIDAO()
 	treasuryRateProvider := repositories.NewTreasuryRateProvider(treasuryAPIDAO)
-	transactionQueryService := services.NewTransactionQueryService(transactionRepository, treasuryRateProvider)
 	valkeyDAO := dao.NewValkeyDAO(redisClient)
 	valkeyPayloadStore := repositories.NewValkeyPayloadStore(valkeyDAO)
+	transactionQueryService := services.NewTransactionQueryService(transactionRepository, treasuryRateProvider, valkeyPayloadStore)
 	rabbitMQConsumer := infra.NewRabbitMQConsumer(amqpChannel, queueName, transactionQueryService, valkeyPayloadStore)
 	return rabbitMQConsumer
 }

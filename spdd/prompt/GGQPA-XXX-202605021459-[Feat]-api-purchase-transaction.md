@@ -13,9 +13,10 @@ class PurchaseTransaction {
     +String description
     +Time transactionDate
     +Decimal purchaseAmount
-    +validate() error
+    +TransactionStatus status
     +Time createdAt
     +Time updatedAt
+    +validate() error
 }
 
 class CurrencyConversionRate {
@@ -30,18 +31,17 @@ class TransactionRequestDTO {
     +String description
     +String transactionDate
     +Decimal purchaseAmount
-    +Time createdAt
-    +Time updatedAt
 }
 
 class TransactionResponseDTO {
     +UUID id
     +String description
     +Time transactionDate
-    +Decimal originalAmount
+    +Decimal purchaseAmountUSD
     +Decimal convertedAmount
     +String targetCurrency
     +Decimal exchangeRate
+    +String message
     +Time createdAt
     +Time updatedAt
 }
@@ -55,13 +55,15 @@ PurchaseTransaction "1" -- "0..1" CurrencyConversionRate : converted using
 1. Asynchronous Processing:
    - Implement an event-driven architecture where the API producer stores the payload temporarily in Valkey and pushes a job message to a RabbitMQ queue.
    - A separate worker/consumer process will pull the job from the queue and persist the `PurchaseTransaction` into PostgreSQL.
+   - For currency conversion, the `conversion-service` tracks async status via `conversion_status:{id}:{currency}` and stores final results in `conversion:{id}:{currency}` in Valkey.
 
 2. Technical Implementation:
    - Language: GoLang
    - Framework/DI: Google Wire for dependency injection
+   - Configuration: Centralized `.env` file loaded via `joho/godotenv`.
    - Architecture: Hexagonal / Clean Architecture (S.O.L.I.D principles)
-   - Persistence: PostgreSQL for canonical Valkey, Valkey for job requests, Valkey for payload store, RabbitMQ for message queuing
-   - Money Handling: Use a dedicated Go decimal library (e.g., `shopspring/decimal`) to avoid floating-point precision loss.
+   - Persistence: PostgreSQL for canonical storage, Valkey for job requests/status, RabbitMQ for message queuing.
+   - Money Handling: Use `shopspring/decimal` to avoid floating-point precision loss.
 
 3. Business Logic:
    - Input validation: Description <= 50 chars, Amount > 0, valid dates.
@@ -76,89 +78,66 @@ PurchaseTransaction "1" -- "0..1" CurrencyConversionRate : converted using
 3. `MessagePublisher` interface defines queue operations.
 4. `RabbitMQPublisher` implements `MessagePublisher`.
 5. `ConversionRateProvider` interface defines rate fetching.
+6. `PayloadStore` interface defines Valkey state management.
 
 ### Dependencies
 1. `TransactionController` depends on `TransactionProducerService`.
 2. `TransactionProducerService` depends on `MessagePublisher` and `PayloadStore` (Valkey).
-3. `TransactionConsumerWorker` depends on `TransactionRepository`.
-4. `TransactionQueryService` depends on `TransactionRepository` and `ConversionRateProvider`.
+3. `TransactionConsumerWorker` depends on `TransactionRepository` and `PayloadStore`.
+4. `TransactionQueryService` depends on `TransactionRepository`, `ConversionRateProvider`, and `PayloadStore`.
 
 ### Layered Architecture
-1. `src/controllers`: Contains HTTP handlers (REST API) for producing messages and querying data.
-2. `src/core`: Contains Domain Entities, Service Interfaces, Use Cases, and Business Logic. Independent of frameworks.
-3. `src/infra`: Contains PostgreSQL repositories, RabbitMQ integrations, Valkey clients, external API clients, and Google Wire setups.
+1. `src/controllers`: HTTP handlers for producing messages and querying data.
+2. `src/core`: Domain Entities, Service Interfaces (Ports), and Business Logic.
+3. `src/infra`: Data access (Postgres, Valkey, RabbitMQ), SQL queries package, and DI setup.
 
 ## Operations
 
 ### Create Domain Models - src/core/domain
 1. Responsibility: Define core business entities.
-2. Attributes:
-   - `PurchaseTransaction`: `ID` (UUID), `Description` (string), `TransactionDate` (time.Time), `Amount` (decimal.Decimal).
-3. Methods:
-   - `Validate()`: Returns error if description > 50 chars or amount <= 0.
-4. Constraints: Must not import any packages from `infra` or `controllers`.
+2. Attributes: `PurchaseTransaction` includes `ID`, `Description`, `TransactionDate`, `Amount`, `Status`, `CreatedAt`, `UpdatedAt`.
+3. Methods: `Validate()` returns error if description > 50 chars or amount <= 0.
 
-### Implement Producer Service - src/core/services
-1. Interface Definition: `CreateTransaction(ctx context.Context, req TransactionRequestDTO) (UUID, error)`
+### Implement Transaction Service - src/core/services
+1. Responsibility: Orchestrate transaction persistence and state transitions.
 2. Core Methods:
-   - Input Validation: Call entity `Validate()`.
-   - Business Logic: Generate UUID, store full payload in Valkey, push job to RabbitMQ queue with the UUID reference.
-3. Dependency Injection: Requires `MessagePublisher` and `PayloadStore`.
-4. Constraints: Must be a singleton
+   - `ProcessTransaction`: Retrieve payload, update status to `PROCESSING`, save to Postgres, update status to `COMPLETED`.
+   - Timestamps: Initialize `CreatedAt`/`UpdatedAt` on creation and refresh `UpdatedAt` on state changes.
 
-### Implement Query Service - src/core/services
-1. Interface Definition: `GetConvertedTransaction(ctx context.Context, id UUID, targetCurrency string) (TransactionResponseDTO, error)`
+### Implement Conversion Service - src/core/services
+1. Responsibility: Handle asynchronous currency conversion requests.
 2. Core Methods:
-   - Business Logic: Fetch transaction from DB. If `targetCurrency` is provided, fetch conversion rate (<= transactionDate and within 6 months). Multiply amount by rate and round to 2 decimal places. Return formatted response.
-   - Exception Handling: Return clear error if rate is unavailable within the 6-month window.
-3. Constraints: Must be a singleton
+   - `GetConvertedTransaction`: Fetch rate, calculate amount, track status in Valkey (`COMPLETED`/`FAILED`), and store results with descriptive `Message`.
+3. Error Handling: Update Valkey status to `FAILED` if rate is unavailable.
 
 ### Create Controllers - src/controllers
-1. Responsibility: HTTP request parsing and response formatting.
-2. Methods:
-   - `POST /transactions`: Binds JSON to DTO, calls Producer Service, returns 202 Accepted with Transaction ID.
-   - `GET /transactions/{id}`: Accepts optional `?currency=XYZ` param, calls Query Service, returns 200 OK or 404/400.
+1. Methods:
+   - `POST /transactions`: Returns 202 Accepted with Transaction ID.
+   - `POST /transactions/{id}/convert`: Triggers conversion, returns 202 with Valkey result key.
+   - `GET /transactions/{id}/convert`: Fetches conversion result from Valkey.
 
 ### Implement Infrastructure - src/infra
-1. Responsibility: Implement data access and external integrations.
-2. Methods:
-   - `PostgresTransactionRepository`: SQL queries to store and retrieve transactions.
-   - `RabbitMQPublisher`: Publish message to exchange/queue.
-   - `RedisJobStore`: Set and Get payload data.
-3. Dependency Injection: Provide Wire provider sets (`wire.NewSet`) for all infra components.
+1. SQL Queries: Store all SQL instructions as constants in `src/infra/queries`.
+2. Repositories:
+   - `PostgresTransactionRepository`: Delegates execution to a generic `PostgresDAO`.
+   - `ValkeyPayloadStore`: Manages JSON serialization/deserialization for Redis/Valkey.
+3. DI: Provide Wire sets for all components, utilizing `InitializeAPI` and `InitializeWorker`.
 
 ### Create flyway sql files
-1. folder flyway
-2. create a makefile for flyway commands: 
-   - migrate: run flyway migrate command
-   - rollback: run flyway rollback command
-   - clean: run flyway clean command
-   - validate: run flyway validate command
-3. create a sql file for the purchase transaction table
-4. create a sql file for the currency conversion rate table
-
-### Configure Dependency Injection - src/infra/di
-1. Responsibility: Setup Google Wire.
-2. Methods:
-   - `InitializeAPI()`: Returns HTTP router/app with all dependencies injected.
-   - `InitializeWorker()`: Returns RabbitMQ consumer worker with all dependencies injected.
+1. Migration V1: Base schema for transactions.
+2. Migration V2: Schema for conversion rates.
+3. Migration V3: Added `status` column to `purchase_transactions`.
+4. Makefile: Commands for `migrate`, `rollback`, `clean`, `validate`.
 
 ## Norms
-1. Code Organization: Strict adherence to the `core`, `infra`, `controllers` folder structure.
-2. Dependency Injection: Use Google Wire exclusively. Avoid global state.
-3. Exception Handling:
-   - Use custom error types in `core` (e.g., `ErrValidation`, `ErrNotFound`, `ErrNoConversionRate`).
-   - Controllers must translate these into appropriate HTTP status codes (400, 404, 422).
-4. Money: Always use `decimal.Decimal` for currency amounts. Never use `float64`.
-5. Documentation: Godoc comments on all exported interfaces and types.
-6. DTOs and domain/services Interfaces shoul be in /core/ports folder.
-7. DTOs must not have validation logic.
-8. Domain must have validation logic.
+1. SQL Management: SQL strings MUST be constants in the `queries` package.
+2. Async Visibility: DTOs MUST include a `Message` field to explain job status/results.
+3. Decoupling: Repositories MUST use DAOs for database interaction to separate query logic from execution.
+4. Error Handling: Map core errors to HTTP codes and update Valkey status on failures.
 
 ## Safeguards
-1. Functional Constraints: Description length MUST NOT exceed 50 characters. Purchase amount MUST be > 0.
-2. Business Rule Constraints: Currency conversion rate MUST be less than or equal to the purchase date AND within exactly 6 months prior.
-3. Integration Constraints: The API producer must safely decouple from the database by utilizing RabbitMQ and Valkey
-4. Exception Handling Constraints: If no currency rate is found in the 6-month window, the query MUST fail with a specific business error, not a generic 500.
-5. Technical Constraints: S.O.L.I.D. principles must be followed. The `core` package must have zero dependencies on `infra` or external libraries other than the decimal package.
-6. Write unit-test for domain, services and infra packages 
+1. Constraints: Description <= 50 chars, Amount > 0.
+2. Business Rules: Rate date <= Purchase date AND within 6 months.
+3. Isolation: API producers MUST decouple from the database using RabbitMQ/Valkey.
+4. Testing: Comprehensive unit tests required for `conversion_service` and `transaction_service` using mocks.
+5. Observability: Structured logging for all service operations and error states.

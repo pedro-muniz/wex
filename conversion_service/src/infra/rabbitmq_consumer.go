@@ -2,21 +2,21 @@ package infra
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"wex/conversion_service/src/core/ports"
 	"wex/conversion_service/src/core/services"
+
+	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type RabbitMQConsumer struct {
-	channel    *amqp.Channel
-	queueName  string
-	service    *services.TransactionQueryService
+	channel      *amqp.Channel
+	queueName    string
+	service      *services.TransactionQueryService
 	payloadStore ports.PayloadStore
 }
 
@@ -30,6 +30,18 @@ func NewRabbitMQConsumer(channel *amqp.Channel, queueName string, service *servi
 }
 
 func (c *RabbitMQConsumer) Start(ctx context.Context) error {
+	_, err := c.channel.QueueDeclare(
+		c.queueName,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+		return fmt.Errorf("failed to declare queue: %w", err)
+	}
+
 	msgs, err := c.channel.Consume(
 		c.queueName,
 		"",
@@ -59,19 +71,12 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 			}
 			currency := parts[1]
 
-			log.Printf("Processing conversion for: %s to %s", id, currency)
-			
-			resp, err := c.service.GetConvertedTransaction(ctx, id, currency)
-			if err != nil {
-				log.Printf("conversion error: %v", err)
-				continue
-			}
+			log.Printf("[Worker] Processing conversion request: ID=%s, TargetCurrency=%s", id, currency)
 
-			respData, _ := json.Marshal(resp)
-			valkeyKey := fmt.Sprintf("conversion:%s:%s", id, currency)
-			
-			if err := c.payloadStore.SetRaw(ctx, valkeyKey, string(respData)); err != nil {
-				log.Printf("failed to store result in valkey: %v", err)
+			_, err = c.service.GetConvertedTransaction(ctx, id, currency)
+			if err != nil {
+				log.Printf("[Worker] [ERROR] Conversion failed for %s: %v", id, err)
+				continue
 			}
 		}
 	}()

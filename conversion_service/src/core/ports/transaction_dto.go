@@ -15,4 +15,6 @@ type TransactionResponseDTO struct {
 	TargetCurrency    string          `json:"targetCurrency,omitempty"`
 	ExchangeRate      decimal.Decimal `json:"exchangeRate,omitempty"`
 	ConvertedAmount   decimal.Decimal `json:"convertedAmount,omitempty"`
+	Message           string          `json:"message,omitempty"`
+	Status            string          `json:"status"`
 }

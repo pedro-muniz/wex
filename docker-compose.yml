@@ -4,41 +4,48 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_DB: wex
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      PGPORT: ${POSTGRES_PORT}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d wex"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
   valkey:
     image: valkey/valkey:latest
+    command: valkey-server --port ${VALKEY_PORT}
     ports:
-      - "6379:6379"
+      - "${VALKEY_PORT}:${VALKEY_PORT}"
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test: [ "CMD", "valkey-cli", "-p", "${VALKEY_PORT}", "ping" ]
       interval: 5s
       timeout: 5s
       retries: 5
 
   rabbitmq:
     image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_NODE_PORT: ${RABBITMQ_PORT}
+      RABBITMQ_MANAGEMENT_LISTENER_PORT: ${RABBITMQ_MANAGEMENT_PORT}
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "${RABBITMQ_PORT}:${RABBITMQ_PORT}"
+      - "${RABBITMQ_MANAGEMENT_PORT}:${RABBITMQ_MANAGEMENT_PORT}"
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      test: [ "CMD", "rabbitmq-diagnostics", "check_running" ]
       interval: 10s
       timeout: 10s
       retries: 5
 
   flyway:
     image: flyway/flyway
-    command: -url=jdbc:postgresql://postgres:5432/wex -user=user -password=password -connectRetries=60 migrate
+    command: -url=jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} -user=${POSTGRES_USER} -password=${POSTGRES_PASSWORD} -connectRetries=60 migrate
     volumes:
       - ./flyway/sql:/flyway/sql
     depends_on:
@@ -47,24 +54,24 @@ services:
 
   api-service:
     build: ./api_service
-    environment:
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - VALKEY_URL=valkey:6379
-      - DATABASE_URL=postgres://user:password@postgres:5432/wex?sslmode=disable
+    env_file:
+      - .env
     ports:
       - "8080:8080"
     depends_on:
+      postgres:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       valkey:
         condition: service_healthy
+      flyway:
+        condition: service_completed_successfully
 
   transaction-service:
     build: ./transaction_service
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/wex?sslmode=disable
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
-      - VALKEY_URL=valkey:6379
+    env_file:
+      - .env
     ports:
       - "8081:8081"
     depends_on:
@@ -79,14 +86,16 @@ services:
 
   conversion-service:
     build: ./conversion_service
-    environment:
-      - DATABASE_URL=postgres://user:password@postgres:5432/wex?sslmode=disable
-      - VALKEY_URL=valkey:6379
-      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    env_file:
+      - .env
     ports:
       - "8082:8082"
     depends_on:
       postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
       flyway:
         condition: service_completed_successfully

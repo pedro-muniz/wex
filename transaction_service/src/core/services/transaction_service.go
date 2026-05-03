@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"wex/transaction_service/src/core/domain"
@@ -22,13 +23,7 @@ func NewTransactionPersistenceService(repo ports.TransactionRepository, payloadS
 }
 
 func (s *TransactionPersistenceService) ProcessTransaction(ctx context.Context, id uuid.UUID) error {
-	// 1. Update status to PROCESSING
-	if err := s.payloadStore.UpdateStatus(ctx, id, domain.StatusProcessing); err != nil {
-		log.Printf("failed to update status to PROCESSING for %s: %v", id, err)
-		return err
-	}
-
-	// 2. Retrieve payload
+	// 1. Retrieve payload
 	tx, err := s.payloadStore.GetPayload(ctx, id)
 	if err != nil {
 		log.Printf("failed to retrieve payload for %s: %v", id, err)
@@ -36,15 +31,27 @@ func (s *TransactionPersistenceService) ProcessTransaction(ctx context.Context, 
 		return err
 	}
 
-	// 3. Persist to Postgres
-	if err := s.repo.Save(ctx, tx); err != nil {
-		log.Printf("failed to persist transaction %s: %v", id, err)
-		s.payloadStore.UpdateStatus(ctx, id, domain.StatusFailed)
+	// 2. Update status to PROCESSING and save full payload
+	tx.Status = domain.StatusProcessing
+	tx.UpdatedAt = time.Now()
+	if err := s.payloadStore.StorePayload(ctx, id, tx); err != nil {
+		log.Printf("failed to update status to PROCESSING for %s: %v", id, err)
 		return err
 	}
 
-	// 4. Update status to COMPLETED
-	if err := s.payloadStore.UpdateStatus(ctx, id, domain.StatusCompleted); err != nil {
+	// 3. Persist to Postgres
+	if err := s.repo.Save(ctx, tx); err != nil {
+		log.Printf("failed to persist transaction %s: %v", id, err)
+		tx.Status = domain.StatusFailed
+		tx.UpdatedAt = time.Now()
+		s.payloadStore.StorePayload(ctx, id, tx)
+		return err
+	}
+
+	// 4. Update status to COMPLETED and save full payload
+	tx.Status = domain.StatusCompleted
+	tx.UpdatedAt = time.Now()
+	if err := s.payloadStore.StorePayload(ctx, id, tx); err != nil {
 		log.Printf("failed to update status to COMPLETED for %s: %v", id, err)
 		return err
 	}
