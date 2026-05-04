@@ -1,0 +1,111 @@
+Feature: Store Purchase Transaction
+  Scenario: Successfully store a valid transaction
+    Given a transaction with description "Book purchase"
+    And a valid transaction date "2026-05-01"
+    And a purchase amount of 25.50 USD
+    When the transaction is submitted
+    Then the transaction should be stored
+    And a unique identifier should be generated
+
+  Scenario: Reject transaction with description longer than 50 characters
+    Given a transaction with description exceeding 50 characters
+    When the transaction is submitted
+    Then the system should return a validation error
+
+  Scenario: Reject transaction with invalid date
+    Given a transaction with an invalid date format
+    When the transaction is submitted
+    Then the system should return a validation error
+
+  Scenario: Reject transaction with negative amount
+    Given a transaction with a negative purchase amount
+    When the transaction is submitted
+    Then the system should return a validation error
+
+Feature: Store Purchase Transaction - Edge Cases
+  Scenario: Accept description with exactly 50 characters
+    Given a transaction with a description of exactly 50 characters
+    And a valid transaction date "2026-05-01"
+    And a purchase amount of 10.00 USD
+    When the transaction is submitted
+    Then the transaction should be stored successfully
+
+  Scenario: Reject description with 51 characters
+    Given a transaction with a description of 51 characters
+    When the transaction is submitted
+    Then the system should return a validation error
+
+  Scenario: Reject transaction with zero amount
+    Given a transaction with a purchase amount of 0.00 USD
+    When the transaction is submitted
+    Then the system should return a validation error
+
+  Scenario: Accept transaction with minimum valid positive amount
+    Given a transaction with a purchase amount of 0.01 USD
+    And a valid transaction date "2026-05-01"
+    When the transaction is submitted
+    Then the transaction should be stored successfully
+
+  Scenario: Round purchase amount to nearest cent
+    Given a transaction with a purchase amount of 10.005 USD
+    When the transaction is submitted
+    Then the stored amount should be 10.01 USD
+    
+Feature: Retrieve Transaction with Currency Conversion
+  Scenario: Successfully retrieve transaction in another currency
+    Given a stored transaction with ID "123"
+    And a valid exchange rate available for the transaction date
+    When the transaction is requested in "EUR"
+    Then the system should return the transaction details
+    And include the original USD amount
+    And include the exchange rate used
+    And include the converted amount in EUR
+
+  Scenario: Use closest exchange rate within 6 months
+    Given a stored transaction with ID "123"
+    And no exact exchange rate for the transaction date
+    But a valid rate exists within the last 6 months
+    When the transaction is requested in "EUR"
+    Then the system should use the closest previous rate
+
+  Scenario: Fail when no exchange rate is available within 6 months
+    Given a stored transaction with ID "123"
+    And no exchange rate within 6 months before the transaction date
+    When the transaction is requested in "EUR"
+    Then the system should return an error indicating conversion is not possible
+
+  Scenario: Converted amount should be rounded to two decimals
+    Given a stored transaction with ID "123"
+    And a valid exchange rate
+    When the transaction is requested in "EUR"
+    Then the converted amount should be rounded to two decimal places
+
+Feature: Retrieve Transaction - Edge Cases
+  Scenario: Use exchange rate exactly on 6-month boundary
+    Given a stored transaction with ID "123"
+    And an exchange rate exactly 6 months before the transaction date
+    When the transaction is requested in "EUR"
+    Then the system should use this exchange rate
+
+  Scenario: Reject conversion if rate is older than 6 months
+    Given a stored transaction with ID "123"
+    And the only available exchange rate is older than 6 months
+    When the transaction is requested in "EUR"
+    Then the system should return a conversion error
+
+  Scenario: Handle very large purchase amounts
+    Given a stored transaction with a very large amount (e.g., 1000000000.00 USD)
+    And a valid exchange rate
+    When the transaction is requested in "EUR"
+    Then the conversion should be calculated correctly without overflow
+
+  Scenario: Handle rounding of converted amount
+    Given a stored transaction with ID "123"
+    And an exchange rate that results in more than two decimal places
+    When the transaction is requested in "EUR"
+    Then the converted amount should be rounded to two decimal places
+
+  Scenario: Reject request for unsupported currency
+    Given a stored transaction with ID "123"
+    When the transaction is requested in an unsupported currency
+    Then the system should return an error
