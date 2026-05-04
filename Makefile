@@ -3,7 +3,7 @@ API_DIR := ./api_service
 TRANS_DIR := ./transaction_service
 CONV_DIR := ./conversion_service
 
-.PHONY: all build test wire swagger clean up down help
+.PHONY: all build test test-e2e wire swagger clean up down help
 
 all: build test
 
@@ -16,6 +16,9 @@ test: ## Run unit tests for all microservices
 	$(MAKE) -C $(API_DIR) test
 	$(MAKE) -C $(TRANS_DIR) test
 	$(MAKE) -C $(CONV_DIR) test
+
+test-e2e: ## Run end-to-end tests
+	go test -v ./e2e_tests/...
 
 wire: ## Generate Wire DI code for all microservices
 	$(MAKE) -C $(API_DIR) wire
@@ -41,4 +44,4 @@ help:
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'

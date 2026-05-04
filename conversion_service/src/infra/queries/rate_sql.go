@@ -5,8 +5,8 @@ const (
 		SELECT target_currency, rate_date, exchange_rate, created_at, updated_at 
 		FROM currency_conversion_rates 
 		WHERE target_currency = $1 
-		  AND rate_date <= $2 
-		  AND rate_date >= $2::date - interval '6 months'
+		  AND rate_date <= $2::timestamp 
+		  AND rate_date >= ($2::timestamp - interval '6 months')
 		ORDER BY rate_date DESC 
 		LIMIT 1`
 

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func TestConversionRequest_Validate(t *testing.T) {
 		},
 		{
 			name:    "invalid length",
-			req:     ConversionRequest{TargetCurrency: "BR"},
+			req:     ConversionRequest{TargetCurrency: strings.Repeat("a", 51)},
 			wantErr: true,
 		},
 		{
