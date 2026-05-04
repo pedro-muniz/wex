@@ -2,6 +2,8 @@
 
 A robust, microservices-based asynchronous system designed to handle purchase transactions with multi-currency support and historical exchange rate conversion.
 
+> The solution is somewhat over-engineered, but it serves a test purpose by enabling discussion of trending architectural patterns. In practice, it could be simplified to an API Gateway, a single stateless application, and a Redis-based caching strategy for the third-party API.
+
 ## 🏗️ Architecture Overview
 
 The system follows an **Event-Driven, Hexagonal Architecture** (Ports and Adapters) to ensure high decoupling and scalability. It utilizes a producer-consumer pattern for processing transactions and currency conversions asynchronously.
