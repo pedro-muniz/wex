@@ -132,3 +132,221 @@ func TestRateCacheProvider_GetRate_L2Hit(t *testing.T) {
 	assert.Equal(t, "5.5", rate.ExchangeRate.String())
 	mockValkeyDAO.AssertExpectations(t)
 }
+
+func TestRateCacheProvider_GetRate_L3HitWithLock(t *testing.T) {
+	mockTreasuryDAO := new(MockTreasuryAPIDAO)
+	treasuryRepo := repositories.NewTreasuryRateRepository(mockTreasuryDAO)
+
+	db, sqlMock, _ := sqlmock.New()
+	defer db.Close()
+	postgresDAO := dao.NewPostgresDAO(db)
+	postgresRepo := repositories.NewRatePostgresRepository(postgresDAO)
+
+	mockValkeyDAO := new(MockValkeyDAO)
+	valkeyRepo := repositories.NewValkeyRepository(mockValkeyDAO)
+
+	provider := NewRateCacheProvider(treasuryRepo, postgresRepo, valkeyRepo)
+
+	ctx := context.Background()
+	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
+	targetCurrency := "BRL"
+	valkeyKey := "rate:BRL:2023-10-27"
+	lockKey := "lock:rate:BRL:2023-10-27"
+
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return("", errors.New("not found"))
+	sqlMock.ExpectQuery("SELECT target_currency").WillReturnError(errors.New("not found"))
+	
+	// Lock acquisition
+	mockValkeyDAO.On("SetNX", ctx, lockKey, "locked", 10*time.Second).Return(true, nil)
+	
+	// API call
+	apiResp := &dao.TreasuryRateResponse{}
+	apiResp.Data = append(apiResp.Data, struct {
+		RecordDate      string `json:"record_date"`
+		CountryCurrency string `json:"country_currency_desc"`
+		ExchangeRate    string `json:"exchange_rate"`
+		EffectiveDate   string `json:"effective_date"`
+	}{ExchangeRate: "5.7", RecordDate: "2023-10-27"})
+
+	mockTreasuryDAO.On("FetchRates", ctx, targetCurrency, mock.Anything, "2023-10-27").Return(apiResp, nil)
+	
+	// DB Upsert
+	sqlMock.ExpectExec("INSERT INTO currency_conversion_rates").WillReturnResult(sqlmock.NewResult(1, 1))
+	
+	// Valkey Cache
+	mockValkeyDAO.On("Set", ctx, valkeyKey, mock.Anything, 24*time.Hour).Return(nil)
+	
+	// Lock Release
+	mockValkeyDAO.On("Del", mock.Anything, lockKey).Return(nil)
+
+	rate, err := provider.GetRate(ctx, targetCurrency, date)
+	assert.NoError(t, err)
+	assert.Equal(t, "5.7", rate.ExchangeRate.String())
+	mockValkeyDAO.AssertExpectations(t)
+	mockTreasuryDAO.AssertExpectations(t)
+}
+
+func TestRateCacheProvider_GetRate_LockFailedRetry(t *testing.T) {
+	mockTreasuryDAO := new(MockTreasuryAPIDAO)
+	treasuryRepo := repositories.NewTreasuryRateRepository(mockTreasuryDAO)
+
+	db, sqlMock, _ := sqlmock.New()
+	defer db.Close()
+	postgresDAO := dao.NewPostgresDAO(db)
+	postgresRepo := repositories.NewRatePostgresRepository(postgresDAO)
+
+	mockValkeyDAO := new(MockValkeyDAO)
+	valkeyRepo := repositories.NewValkeyRepository(mockValkeyDAO)
+
+	provider := NewRateCacheProvider(treasuryRepo, postgresRepo, valkeyRepo)
+
+	ctx := context.Background()
+	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
+	targetCurrency := "BRL"
+	valkeyKey := "rate:BRL:2023-10-27"
+	lockKey := "lock:rate:BRL:2023-10-27"
+
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return("", errors.New("not found")).Once()
+	sqlMock.ExpectQuery("SELECT target_currency").WillReturnError(errors.New("not found"))
+	
+	// Lock acquisition fails
+	mockValkeyDAO.On("SetNX", ctx, lockKey, "locked", 10*time.Second).Return(false, nil)
+	
+	// Retry read from Valkey
+	cr := cachedRate{
+		Rate: domain.CurrencyConversionRate{ExchangeRate: decimal.NewFromFloat(5.8)},
+	}
+	crBytes, _ := json.Marshal(cr)
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return(string(crBytes), nil).Once()
+
+	rate, err := provider.GetRate(ctx, targetCurrency, date)
+	assert.NoError(t, err)
+	assert.Equal(t, "5.8", rate.ExchangeRate.String())
+}
+
+func TestRateCacheProvider_GetRate_StaleWhileRevalidate(t *testing.T) {
+	mockTreasuryDAO := new(MockTreasuryAPIDAO)
+	treasuryRepo := repositories.NewTreasuryRateRepository(mockTreasuryDAO)
+
+	db, _, _ := sqlmock.New()
+	defer db.Close()
+	postgresDAO := dao.NewPostgresDAO(db)
+	postgresRepo := repositories.NewRatePostgresRepository(postgresDAO)
+
+	mockValkeyDAO := new(MockValkeyDAO)
+	valkeyRepo := repositories.NewValkeyRepository(mockValkeyDAO)
+
+	provider := NewRateCacheProvider(treasuryRepo, postgresRepo, valkeyRepo)
+
+	ctx := context.Background()
+	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
+	targetCurrency := "BRL"
+	valkeyKey := "rate:BRL:2023-10-27"
+
+	cr := cachedRate{
+		Rate: domain.CurrencyConversionRate{ExchangeRate: decimal.NewFromFloat(5.0)},
+		ExpiresAt: time.Now().Add(-1 * time.Hour), // Stale
+	}
+	crBytes, _ := json.Marshal(cr)
+
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return(string(crBytes), nil)
+	
+	// Expect async refresh
+	mockValkeyDAO.On("SetNX", mock.Anything, mock.Anything, "locked", 10*time.Second).Return(false, nil)
+
+	rate, err := provider.GetRate(ctx, targetCurrency, date)
+	assert.NoError(t, err)
+	assert.Equal(t, "5", rate.ExchangeRate.String())
+	
+	// Give a small time for the goroutine to trigger (even if it fails to get lock in our mock)
+	time.Sleep(100 * time.Millisecond)
+	mockValkeyDAO.AssertExpectations(t)
+}
+
+func TestRateCacheProvider_GetRate_StaleWhileRevalidate_Success(t *testing.T) {
+	mockTreasuryDAO := new(MockTreasuryAPIDAO)
+	treasuryRepo := repositories.NewTreasuryRateRepository(mockTreasuryDAO)
+
+	db, sqlMock, _ := sqlmock.New()
+	defer db.Close()
+	postgresDAO := dao.NewPostgresDAO(db)
+	postgresRepo := repositories.NewRatePostgresRepository(postgresDAO)
+
+	mockValkeyDAO := new(MockValkeyDAO)
+	valkeyRepo := repositories.NewValkeyRepository(mockValkeyDAO)
+
+	provider := NewRateCacheProvider(treasuryRepo, postgresRepo, valkeyRepo)
+
+	ctx := context.Background()
+	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
+	targetCurrency := "BRL"
+	valkeyKey := "rate:BRL:2023-10-27"
+	lockKey := "lock:rate:BRL:2023-10-27"
+
+	cr := cachedRate{
+		Rate: domain.CurrencyConversionRate{ExchangeRate: decimal.NewFromFloat(5.0)},
+		ExpiresAt: time.Now().Add(-1 * time.Hour), // Stale
+	}
+	crBytes, _ := json.Marshal(cr)
+
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return(string(crBytes), nil)
+	
+	// Expect async refresh success
+	mockValkeyDAO.On("SetNX", mock.Anything, lockKey, "locked", 10*time.Second).Return(true, nil)
+	
+	apiResp := &dao.TreasuryRateResponse{}
+	apiResp.Data = append(apiResp.Data, struct {
+		RecordDate      string `json:"record_date"`
+		CountryCurrency string `json:"country_currency_desc"`
+		ExchangeRate    string `json:"exchange_rate"`
+		EffectiveDate   string `json:"effective_date"`
+	}{ExchangeRate: "5.9", RecordDate: "2023-10-27"})
+	
+	mockTreasuryDAO.On("FetchRates", mock.Anything, targetCurrency, mock.Anything, "2023-10-27").Return(apiResp, nil)
+	sqlMock.ExpectExec("INSERT INTO currency_conversion_rates").WillReturnResult(sqlmock.NewResult(1, 1))
+	mockValkeyDAO.On("Set", mock.Anything, valkeyKey, mock.Anything, 24*time.Hour).Return(nil)
+	mockValkeyDAO.On("Del", mock.Anything, lockKey).Return(nil)
+
+	rate, err := provider.GetRate(ctx, targetCurrency, date)
+	assert.NoError(t, err)
+	assert.Equal(t, "5", rate.ExchangeRate.String()) // Returns stale data immediately
+	
+	time.Sleep(200 * time.Millisecond)
+	mockValkeyDAO.AssertExpectations(t)
+	mockTreasuryDAO.AssertExpectations(t)
+}
+
+
+func TestRateCacheProvider_GetRate_NoConversionRate(t *testing.T) {
+	mockTreasuryDAO := new(MockTreasuryAPIDAO)
+	treasuryRepo := repositories.NewTreasuryRateRepository(mockTreasuryDAO)
+
+	db, sqlMock, _ := sqlmock.New()
+	defer db.Close()
+	postgresDAO := dao.NewPostgresDAO(db)
+	postgresRepo := repositories.NewRatePostgresRepository(postgresDAO)
+
+	mockValkeyDAO := new(MockValkeyDAO)
+	valkeyRepo := repositories.NewValkeyRepository(mockValkeyDAO)
+
+	provider := NewRateCacheProvider(treasuryRepo, postgresRepo, valkeyRepo)
+
+	ctx := context.Background()
+	date := time.Date(2023, 10, 27, 0, 0, 0, 0, time.UTC)
+	targetCurrency := "BRL"
+	valkeyKey := "rate:BRL:2023-10-27"
+	lockKey := "lock:rate:BRL:2023-10-27"
+
+	mockValkeyDAO.On("Get", ctx, valkeyKey).Return("", errors.New("not found"))
+	sqlMock.ExpectQuery("SELECT target_currency").WillReturnError(errors.New("not found"))
+	mockValkeyDAO.On("SetNX", ctx, lockKey, "locked", 10*time.Second).Return(true, nil)
+	
+	// API returns no data
+	mockTreasuryDAO.On("FetchRates", ctx, targetCurrency, mock.Anything, "2023-10-27").Return(&dao.TreasuryRateResponse{}, nil)
+	mockValkeyDAO.On("Del", mock.Anything, lockKey).Return(nil)
+
+	_, err := provider.GetRate(ctx, targetCurrency, date)
+	assert.Error(t, err)
+	assert.True(t, errors.Is(err, domain.ErrNoConversionRate))
+}
+

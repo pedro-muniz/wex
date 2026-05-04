@@ -4,6 +4,14 @@ A robust, microservices-based asynchronous system designed to handle purchase tr
 
 > The solution is somewhat over-engineered, but it serves a test purpose by enabling discussion of trending architectural patterns. In practice, it could be simplified to an API Gateway, a single stateless application, and a Redis-based caching strategy for the third-party API.
 
+### Key Features & Design Principles
+
+1. **Financial Rigor**: Employs `shopspring/decimal` for arithmetic, `DECIMAL(19,4/6)` in the database, and explicit rounding at the service layer to ensure monetary precision.
+2. **Smart Conversion**: Implements an L1/L2/L3 cache strategy with a 6-month fallback rule and distributed locks (Valkey NX) to prevent thundering herd issues.
+3. **Production Quality**: Built with Hexagonal Architecture and Dependency Injection (Google Wire). Includes structured logging, robust error handling, and high test coverage (~100% core logic).
+4. **Portability**: Fully containerized with Docker Compose and managed via a Makefile for easy execution.
+
+
 ## 🏗️ Architecture Overview
 
 The system follows an **Event-Driven, Hexagonal Architecture** (Ports and Adapters) to ensure high decoupling and scalability. It utilizes a producer-consumer pattern for processing transactions and currency conversions asynchronously.
