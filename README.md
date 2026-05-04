@@ -56,6 +56,27 @@ The system is configured via a centralized `.env` file in the root directory. Ke
 - `RABBITMQ_URL`
 - `VALKEY_URL`
 
+Create a .env in root folder and e2e_tests folder using this sample:
+```bash
+# Postgres
+POSTGRES_DB=wex
+POSTGRES_USER=user
+POSTGRES_PASSWORD=password
+POSTGRES_PORT=5435
+POSTGRES_HOST=localhost
+
+# Valkey
+VALKEY_PORT=6379
+VALKEY_HOST=valkey
+
+# RabbitMQ
+RABBITMQ_USER=guest
+RABBITMQ_PASSWORD=guest
+RABBITMQ_PORT=5672
+RABBITMQ_MANAGEMENT_PORT=15672
+RABBITMQ_HOST=rabbitmq
+```
+
 ### Running with Docker
 ```bash
 # Start all services and run migrations

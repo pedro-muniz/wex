@@ -3,14 +3,17 @@ package repositories
 import (
 	"context"
 	"database/sql"
+	"regexp"
 	"testing"
 	"time"
+
+	"wex/conversion_service/src/core/domain"
+	"wex/conversion_service/src/infra/dao"
+	"wex/conversion_service/src/infra/queries"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
-	"wex/conversion_service/src/core/domain"
-	"wex/conversion_service/src/infra/dao"
 )
 
 func TestRatePostgresRepository_FindByCurrencyAndDate(t *testing.T) {
@@ -30,7 +33,7 @@ func TestRatePostgresRepository_FindByCurrencyAndDate(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"target_currency", "rate_date", "exchange_rate", "created_at", "updated_at"}).
 			AddRow("BRL", date, decimal.NewFromFloat(5.0), time.Now(), time.Now())
 
-		mock.ExpectQuery("SELECT target_currency, rate_date, exchange_rate, created_at, updated_at FROM currency_conversion_rates WHERE target_currency = \\$1 AND rate_date <= \\$2 AND rate_date >= \\$2::date - interval '6 months' ORDER BY rate_date DESC LIMIT 1").
+		mock.ExpectQuery(regexp.QuoteMeta(queries.FindByCurrencyAndDate)).
 			WithArgs(targetCurrency, "2023-10-27").
 			WillReturnRows(rows)
 
@@ -41,7 +44,7 @@ func TestRatePostgresRepository_FindByCurrencyAndDate(t *testing.T) {
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		mock.ExpectQuery("SELECT target_currency, rate_date, exchange_rate, created_at, updated_at FROM currency_conversion_rates WHERE target_currency = \\$1 AND rate_date <= \\$2 AND rate_date >= \\$2::date - interval '6 months' ORDER BY rate_date DESC LIMIT 1").
+		mock.ExpectQuery(regexp.QuoteMeta(queries.FindByCurrencyAndDate)).
 			WithArgs(targetCurrency, "2023-10-27").
 			WillReturnError(sql.ErrNoRows)
 
