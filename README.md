@@ -33,7 +33,9 @@ The calculation engine. It handles asynchronous currency conversion requests. It
 
 ---
 
-## 🚀 API Endpoints - http://localhost:8080/swagger/index.html
+## 🚀 API Endpoints 
+
+http://localhost:8080/swagger/index.html
 
 ### Transactions
 - **`POST /transactions`**: Create a new purchase transaction in USD.
