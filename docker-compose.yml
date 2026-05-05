@@ -45,7 +45,7 @@ services:
 
   flyway:
     image: flyway/flyway
-    command: -url=jdbc:postgresql://${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB} -user=${POSTGRES_USER} -password=${POSTGRES_PASSWORD} -connectRetries=60 migrate
+    command: -url=jdbc:postgresql://postgres:${POSTGRES_PORT}/${POSTGRES_DB} -user=${POSTGRES_USER} -password=${POSTGRES_PASSWORD} -connectRetries=60 migrate
     volumes:
       - ./flyway/sql:/flyway/sql
     depends_on:
@@ -56,6 +56,8 @@ services:
     build: ./api_service
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
     ports:
       - "8080:8080"
     depends_on:
@@ -72,6 +74,8 @@ services:
     build: ./transaction_service
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
     ports:
       - "8081:8081"
     depends_on:
@@ -88,6 +92,8 @@ services:
     build: ./conversion_service
     env_file:
       - .env
+    environment:
+      POSTGRES_HOST: postgres
     ports:
       - "8082:8082"
     depends_on:
