@@ -84,7 +84,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Target Currency Code (e.g. BRL)",
+                        "description": "Target Currency Description (e.g. Brazil-Real)",
                         "name": "currency",
                         "in": "query",
                         "required": true
@@ -121,7 +121,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Target Currency Code (e.g. BRL)",
+                        "description": "Target Currency Description (e.g. Brazil-Real)",
                         "name": "currency",
                         "in": "query",
                         "required": true
