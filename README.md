@@ -1,4 +1,4 @@
-# WEX Purchase Transaction System
+# Rabbit MQ - Microservices - Purchase Transaction System
 
 A robust, microservices-based asynchronous system designed to handle purchase transactions with multi-currency support and historical exchange rate conversion.
 
